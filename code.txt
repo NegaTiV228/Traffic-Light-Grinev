@@ -1,0 +1,143 @@
+// Пины для светодиодов
+const int GREEN_LED = 15;   // Зеленый светодиод на D1
+const int YELLOW_LED = 2;   // Желтый светодиод на пине 2
+const int RED_LED = 4;      // Красный светодиод на пине 4
+
+// Настройки времени (в миллисекундах)
+unsigned long modeDuration = 5000;  // Длительность каждого режима (5 секунд по умолчанию)
+const long blinkInterval = 500;      // Интервал мигания 500мс
+
+// Переменные для режимов
+int currentMode = 1;  // Текущий режим (1-4)
+bool yellowState = false;  // Состояние желтого светодиода для мигания
+
+// Таймеры
+unsigned long previousModeMillis = 0;
+unsigned long previousBlinkMillis = 0;
+
+// Для ввода с монитора порта
+String inputString = "";
+
+void setup() {
+    Serial.begin(115200);
+    Serial.println("ESP32 Modes");
+    Serial.println("s - settings, tX - time, m - manual");
+    
+    pinMode(GREEN_LED, OUTPUT);
+    pinMode(YELLOW_LED, OUTPUT);
+    pinMode(RED_LED, OUTPUT);
+    
+    digitalWrite(GREEN_LED, LOW);
+    digitalWrite(YELLOW_LED, LOW);
+    digitalWrite(RED_LED, LOW);
+    
+    previousModeMillis = millis();
+    showSettings();
+}
+
+void showSettings() {
+    Serial.print("Time: ");
+    Serial.print(modeDuration / 1000);
+    Serial.println("s");
+    Serial.print("Mode: ");
+    Serial.println(currentMode);
+}
+
+void loop() {
+    unsigned long currentMillis = millis();
+    
+    if (Serial.available() > 0) {
+        char c = Serial.read();
+        
+        if (c == '\n') {
+            if (inputString.length() > 0) {
+                processCommand(inputString);
+                inputString = "";
+            }
+        } else {
+            inputString += c;
+        }
+    }
+    
+    if (currentMillis - previousModeMillis >= modeDuration) {
+        previousModeMillis = currentMillis;
+        nextMode();
+    }
+    
+    switch (currentMode) {
+        case 1:
+            digitalWrite(GREEN_LED, HIGH);
+            digitalWrite(YELLOW_LED, LOW);
+            digitalWrite(RED_LED, LOW);
+            break;
+            
+        case 2:
+            digitalWrite(GREEN_LED, HIGH);
+            digitalWrite(RED_LED, LOW);
+            
+            if (currentMillis - previousBlinkMillis >= blinkInterval) {
+                previousBlinkMillis = currentMillis;
+                yellowState = !yellowState;
+                digitalWrite(YELLOW_LED, yellowState);
+            }
+            break;
+            
+        case 3:
+            digitalWrite(GREEN_LED, LOW);
+            digitalWrite(YELLOW_LED, LOW);
+            digitalWrite(RED_LED, HIGH);
+            break;
+            
+        case 4:
+            digitalWrite(GREEN_LED, LOW);
+            digitalWrite(RED_LED, HIGH);
+            
+            if (currentMillis - previousBlinkMillis >= blinkInterval) {
+                previousBlinkMillis = currentMillis;
+                yellowState = !yellowState;
+                digitalWrite(YELLOW_LED, yellowState);
+            }
+            break;
+    }
+    
+    delay(10);
+}
+
+void nextMode() {
+    currentMode++;
+    if (currentMode > 4) currentMode = 1;
+    
+    Serial.print("Mode: ");
+    Serial.println(currentMode);
+    
+    yellowState = false;
+    digitalWrite(YELLOW_LED, LOW);
+}
+
+void processCommand(String cmd) {
+    cmd.trim();
+    
+    if (cmd == "s" || cmd == "S") {
+        showSettings();
+    }
+    else if (cmd == "m" || cmd == "M") {
+        previousModeMillis = millis();
+        nextMode();
+    }
+    else if (cmd.startsWith("t") || cmd.startsWith("T")) {
+        int seconds = cmd.substring(1).toInt();
+        
+        if (seconds > 0 && seconds <= 60) {
+            modeDuration = seconds * 1000;
+            Serial.print("Time: ");
+            Serial.print(seconds);
+            Serial.println("s");
+            previousModeMillis = millis();
+        } else {
+            Serial.println("Use 1-60");
+        }
+    }
+    else {
+        Serial.println("Use s, tX, m");
+    }
+}
