@@ -1,143 +1,336 @@
-// Пины для светодиодов
-const int GREEN_LED = 15;   // Зеленый светодиод на D1
-const int YELLOW_LED = 2;   // Желтый светодиод на пине 2
-const int RED_LED = 4;      // Красный светодиод на пине 4
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+// светофоры
+const int NSR = 42; //Север-Юг красный свет
+const int WER = 41; //Запад-Восток красный свет
+const int NSY =  3; //Север-Юг жёлтый свет
+const int WEY =  4; //Запад-Восток жёлтый свет
+const int NSG =  0; //Север-Юг зелёный свет
+const int WEG = 45; //Запад-Восток зелёный свет
+const int WR  = 39;  //Пешеход красный свет
+const int WG  = 40;  //Пешеход зелёный свет
+// диагностика
+const int DP1 = 37; //Точка самодиагностики 1
+const int DP2 = 36; //Точка самодиагностики 2
+const int DP3 = 35; //Точка самодиагностики 3
+const int DP4 = 34; //Точка самодиагностики 4
+const int DP5 = 33; //Точка самодиагностики 5
+const int DP6 = 26; //Точка самодиагностики 6
+const int DP7 = 19; //Точка самодиагностики 7
+const int DP8 = 18; //Точка самодиагностики 8
+const int DPA = 38; //Точка самодиагностики A
+const int DPB = 17; //Точка самодиагностики B
+const int DPC = 16; //Точка самодиагностики C
+const int DPD = 15; //Точка самодиагностики D
+const int DPE = 14; //Точка самодиагностики E
+const int DPF = 13; //Точка самодиагностики F
+// переферия
+const int BUZ =  9; //Звуковое оповещение
+const int SW  = 12; //кнопка энкодера
+const int DT  = 11; //выход B энкодера
+const int CLK = 10; //выход A энкодера
 
-// Настройки времени (в миллисекундах)
-unsigned long modeDuration = 5000;  // Длительность каждого режима (5 секунд по умолчанию)
-const long blinkInterval = 500;      // Интервал мигания 500мс
+enum State {
+  STATE_1,
+  STATE_2,
+  STATE_3,
+  STATE_4,
+  STATE_5,
+  STATE_6,
+  STATE_7,
+  STATE_8,
+  STATE_9
+};
 
-// Переменные для режимов
-int currentMode = 1;  // Текущий режим (1-4)
-bool yellowState = false;  // Состояние желтого светодиода для мигания
+//длительности режимов 
+unsigned long TIME_ST_1 = 5000    ;  // длительность режима 1
+unsigned long TIME_ST_2 = 3000    ;  // длительность режима 2
+unsigned long TIME_ST_3 = 2000    ;  // длительность режима 3
+unsigned long TIME_ST_4 = 5000    ;  // длительность режима 4
+unsigned long TIME_ST_5 = 3000    ;  // длительность режима 5
+unsigned long TIME_ST_6 = 2000    ;  // длительность режима 6
+unsigned long TIME_ST_7 = 4000    ;  // длительность режима 7
+unsigned long TIME_ST_8 = 3000    ;  // длительность режима 8
 
-// Таймеры
-unsigned long previousModeMillis = 0;
-unsigned long previousBlinkMillis = 0;
+State currentState = STATE_1;  // Глобальная переменная
+unsigned long lastStateChangeTime = 0;
 
-// Для ввода с монитора порта
-String inputString = "";
-
-void setup() {
-    Serial.begin(115200);
-    Serial.println("ESP32 Modes");
-    Serial.println("s - settings, tX - time, m - manual");
-    
-    pinMode(GREEN_LED, OUTPUT);
-    pinMode(YELLOW_LED, OUTPUT);
-    pinMode(RED_LED, OUTPUT);
-    
-    digitalWrite(GREEN_LED, LOW);
-    digitalWrite(YELLOW_LED, LOW);
-    digitalWrite(RED_LED, LOW);
-    
-    previousModeMillis = millis();
-    showSettings();
+unsigned long getStateDelay(State state) {
+  switch(state) {
+    case STATE_1: return TIME_ST_1;
+    case STATE_2: return TIME_ST_2;
+    case STATE_3: return TIME_ST_3;
+    case STATE_4: return TIME_ST_4;
+    case STATE_5: return TIME_ST_5;
+    case STATE_6: return TIME_ST_6;
+    case STATE_7: return TIME_ST_7;
+    case STATE_8: return TIME_ST_8;
+    default: return 5000;
+  }
 }
 
-void showSettings() {
-    Serial.print("Time: ");
-    Serial.print(modeDuration / 1000);
-    Serial.println("s");
-    Serial.print("Mode: ");
-    Serial.println(currentMode);
+void setup() {
+// светодиоды
+ pinMode(NSR, OUTPUT);
+ pinMode(WER, OUTPUT);
+ pinMode(NSY, OUTPUT);
+ pinMode(WEY, OUTPUT);
+ pinMode(NSG, OUTPUT);
+ pinMode(WEG, OUTPUT);
+ pinMode(WR , OUTPUT);
+ pinMode(WG , OUTPUT);
+
+// диагностика
+ pinMode(DP1, INPUT_PULLDOWN);
+ pinMode(DP2, INPUT_PULLDOWN);
+ pinMode(DP3, INPUT_PULLDOWN);
+ pinMode(DP4, INPUT_PULLDOWN);
+ pinMode(DP5, INPUT_PULLDOWN);
+ pinMode(DP6, INPUT_PULLDOWN);
+ pinMode(DP7, INPUT_PULLDOWN);
+ pinMode(DP8, INPUT_PULLDOWN);
+ pinMode(DPA, INPUT_PULLDOWN);
+ pinMode(DPB, INPUT_PULLDOWN);
+ pinMode(DPC, INPUT_PULLDOWN);
+ pinMode(DPD, INPUT_PULLDOWN);
+ pinMode(DPE, INPUT_PULLDOWN);
+ pinMode(DPF, INPUT_PULLDOWN);
+// переферия
+ pinMode(BUZ, OUTPUT);
+ pinMode(SW , INPUT );
+ pinMode(DT , INPUT );
+ pinMode(CLK, INPUT );
+ Serial.begin(115200);
+setState(STATE_1);
+}
+
+// Функция для переключения на следующий режим
+void nextState() {
+  int nextMode = (currentState + 1) % 8; 
+  currentState = (State)nextMode;
+  setState(currentState);
+  lastStateChangeTime = millis();
+}
+
+void setState(State state) {
+  
+  switch(state) {
+    case STATE_1:
+      Serial.println("Режим 1");
+      digitalWrite(NSR, LOW ); 
+      digitalWrite(WER, HIGH); 
+      digitalWrite(NSY, LOW ); 
+      digitalWrite(WEY, LOW ); 
+      digitalWrite(NSG, HIGH); 
+      digitalWrite(WEG, LOW ); 
+      digitalWrite(WR , HIGH); 
+      digitalWrite(WG , LOW ); 
+      break;
+
+    case STATE_2:
+      Serial.println("Режим 2");
+      digitalWrite(NSR, LOW); 
+      digitalWrite(WER, HIGH); 
+      digitalWrite(NSY, LOW); 
+      digitalWrite(WEY, LOW); 
+      digitalWrite(WEG, LOW); 
+      digitalWrite(WR , HIGH); 
+      digitalWrite(WG , LOW);
+      break;
+
+    case STATE_3:
+      Serial.println("Режим 3");
+      digitalWrite(NSR, LOW ); 
+      digitalWrite(WER, HIGH); 
+      digitalWrite(NSY, HIGH); 
+      digitalWrite(WEY, HIGH); 
+      digitalWrite(NSG, LOW ); 
+      digitalWrite(WEG, LOW ); 
+      digitalWrite(WR , HIGH); 
+      digitalWrite(WG , LOW ); 
+      break;
+
+    case STATE_4:
+      Serial.println("Режим 4");
+      digitalWrite(NSR, HIGH); 
+      digitalWrite(WER, LOW ); 
+      digitalWrite(NSY, LOW ); 
+      digitalWrite(WEY, LOW ); 
+      digitalWrite(NSG, LOW ); 
+      digitalWrite(WEG, HIGH); 
+      digitalWrite(WR , HIGH); 
+      digitalWrite(WG , LOW ); 
+      break;
+
+    case STATE_5:
+      Serial.println("Режим 5");
+      digitalWrite(NSR, HIGH); 
+      digitalWrite(WER, LOW ); 
+      digitalWrite(NSY, LOW ); 
+      digitalWrite(WEY, LOW ); 
+      digitalWrite(NSG, LOW ); 
+      digitalWrite(WR , HIGH); 
+      digitalWrite(WG , LOW ); 
+      break;
+
+    case STATE_6:
+      Serial.println("Режим 6");
+      digitalWrite(NSR, HIGH); 
+      digitalWrite(WER, LOW ); 
+      digitalWrite(NSY, LOW ); 
+      digitalWrite(WEY, HIGH); 
+      digitalWrite(NSG, LOW ); 
+      digitalWrite(WEG, LOW ); 
+      digitalWrite(WR , HIGH); 
+      digitalWrite(WG , LOW ); 
+      break;
+
+    case STATE_7:
+      Serial.println("Режим 7");
+      digitalWrite(NSR, HIGH); 
+      digitalWrite(WER, HIGH); 
+      digitalWrite(NSY, LOW ); 
+      digitalWrite(WEY, LOW ); 
+      digitalWrite(NSG, LOW ); 
+      digitalWrite(WEG, LOW ); 
+      digitalWrite(WR , LOW ); 
+      digitalWrite(WG , HIGH); 
+      break;
+
+    case STATE_8:
+      Serial.println("Режим 8");
+      digitalWrite(NSR, HIGH); 
+      digitalWrite(WER, HIGH); 
+      digitalWrite(NSY, HIGH); 
+      digitalWrite(WEY, LOW ); 
+      digitalWrite(NSG, LOW ); 
+      digitalWrite(WEG, LOW ); 
+      digitalWrite(WR , LOW ); 
+      digitalWrite(WG , HIGH); 
+      break;
+
+    case STATE_9:
+      Serial.println("Авария");
+      digitalWrite(NSR, LOW ); 
+      digitalWrite(WER, LOW ); 
+      digitalWrite(NSG, LOW ); 
+      digitalWrite(WEG, LOW ); 
+      digitalWrite(WR , LOW ); 
+      digitalWrite(WG , HIGH); 
+      break;
+  }
+}
+
+// Функция для неблокирующего мигания
+void Blink(int pin, unsigned long interval = 500) {
+  static unsigned long lastBlink[48] = {0};  // Массив времени пина
+  static bool ledState[48] = {false};        // Массив состояния пина
+  unsigned long currentTime = millis();
+  
+  if (currentTime - lastBlink[pin] >= interval) {  
+    lastBlink[pin] = currentTime;
+    ledState[pin] = !ledState[pin];
+    digitalWrite(pin, ledState[pin]);
+  }
+}
+
+// Функция для установки задержки режима
+void setStateDelay(int stateNumber, unsigned long delayMs) {
+  switch(stateNumber) {
+    case 1: TIME_ST_1 = delayMs; break;
+    case 2: TIME_ST_2 = delayMs; break;
+    case 3: TIME_ST_3 = delayMs; break;
+    case 4: TIME_ST_4 = delayMs; break;
+    case 5: TIME_ST_5 = delayMs; break;
+    case 6: TIME_ST_6 = delayMs; break;
+    case 7: TIME_ST_7 = delayMs; break;
+    case 8: TIME_ST_8 = delayMs; break;
+    default: Serial.println("Ошибка"); break;
+  }
+  Serial.print("Задержка для режима ");
+  Serial.print(stateNumber);
+  Serial.print(" установлена: ");
+  Serial.print(delayMs);
+  Serial.println(" мс");
 }
 
 void loop() {
-    unsigned long currentMillis = millis();
-    
-    if (Serial.available() > 0) {
-        char c = Serial.read();
-        
-        if (c == '\n') {
-            if (inputString.length() > 0) {
-                processCommand(inputString);
-                inputString = "";
-            }
-        } else {
-            inputString += c;
-        }
-    }
-    
-    if (currentMillis - previousModeMillis >= modeDuration) {
-        previousModeMillis = currentMillis;
-        nextMode();
-    }
-    
-    switch (currentMode) {
-        case 1:
-            digitalWrite(GREEN_LED, HIGH);
-            digitalWrite(YELLOW_LED, LOW);
-            digitalWrite(RED_LED, LOW);
-            break;
-            
-        case 2:
-            digitalWrite(GREEN_LED, HIGH);
-            digitalWrite(RED_LED, LOW);
-            
-            if (currentMillis - previousBlinkMillis >= blinkInterval) {
-                previousBlinkMillis = currentMillis;
-                yellowState = !yellowState;
-                digitalWrite(YELLOW_LED, yellowState);
-            }
-            break;
-            
-        case 3:
-            digitalWrite(GREEN_LED, LOW);
-            digitalWrite(YELLOW_LED, LOW);
-            digitalWrite(RED_LED, HIGH);
-            break;
-            
-        case 4:
-            digitalWrite(GREEN_LED, LOW);
-            digitalWrite(RED_LED, HIGH);
-            
-            if (currentMillis - previousBlinkMillis >= blinkInterval) {
-                previousBlinkMillis = currentMillis;
-                yellowState = !yellowState;
-                digitalWrite(YELLOW_LED, yellowState);
-            }
-            break;
-    }
-    
-    delay(10);
-}
 
-void nextMode() {
-    currentMode++;
-    if (currentMode > 4) currentMode = 1;
-    
-    Serial.print("Mode: ");
-    Serial.println(currentMode);
-    
-    yellowState = false;
-    digitalWrite(YELLOW_LED, LOW);
-}
+  // Чтение команд от консоли
+  if (Serial.available() > 0) {
+    String input = Serial.readString();
+    input.trim();
 
-void processCommand(String cmd) {
-    cmd.trim();
-    
-    if (cmd == "s" || cmd == "S") {
-        showSettings();
-    }
-    else if (cmd == "m" || cmd == "M") {
-        previousModeMillis = millis();
-        nextMode();
-    }
-    else if (cmd.startsWith("t") || cmd.startsWith("T")) {
-        int seconds = cmd.substring(1).toInt();
-        
-        if (seconds > 0 && seconds <= 60) {
-            modeDuration = seconds * 1000;
-            Serial.print("Time: ");
-            Serial.print(seconds);
-            Serial.println("s");
-            previousModeMillis = millis();
-        } else {
-            Serial.println("Use 1-60");
+     // Команда для переключения режима
+    if (input.startsWith("m")) {
+      int modeNumber = input.substring(1).toInt();
+      if (modeNumber >= 1 && modeNumber <= 9) {
+        State newState = (State)(modeNumber - 1);
+        if (newState != currentState) {
+          currentState = newState;
+          setState(currentState);
+          lastStateChangeTime = millis(); 
+          Serial.println("Ручное переключение");
         }
+      } else {
+        Serial.print("Ошибка");
+        Serial.println(modeNumber);
+      }
     }
-    else {
-        Serial.println("Use s, tX, m");
+
+    // Команда для установки задержки: t<режим>,<задержка> например: t1,10000
+    else if (input.startsWith("t")) {
+      int commaPos = input.indexOf(',');
+      if (commaPos > 0) {
+        int modeNumber = input.substring(1, commaPos).toInt();
+        unsigned long delayMs = input.substring(commaPos + 1).toInt();
+        if (modeNumber >= 1 && modeNumber <= 9 && delayMs > 0) {
+          setStateDelay(modeNumber, delayMs);
+        } else {}
+      } else {}
+    
+    } else {
+      Serial.print("Ошибка");
+      Serial.println(input);
     }
+  }
+  
+// мигания отдельно, должны быть в loop
+  switch(currentState) {
+    case STATE_2:
+      Blink(NSG); 
+      break;
+    
+    case STATE_5:
+      Blink(WEG);  
+      break;
+
+    case STATE_7:
+      Blink(BUZ);  
+      break;
+
+    case STATE_8:
+      Blink(WG);
+      Blink(BUZ, 250);  
+      break;
+      
+    case STATE_9:
+      Blink(WEY);
+      Blink(NSY);  
+      break;
+
+    default:
+      break;
+  }
+
+// Автоматическое переключение режимов
+  unsigned long currentTime = millis();
+    unsigned long currentDelay = getStateDelay(currentState);
+    
+    if (currentTime - lastStateChangeTime >= currentDelay) {
+      nextState();
+    }
+
+  delay(10);  // Небольшая задержка для стабильности
 }
