@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "author": "Даниил Дидилика",
+  "author": "Гринев Гордей",
   "editor": "wokwi",
   "parts": [
     {
