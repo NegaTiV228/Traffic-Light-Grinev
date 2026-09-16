@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "author": "Даниил Дидилика",
+  "author": "Гринев Гордей",
   "editor": "wokwi",
   "parts": [
     { "type": "wokwi-breadboard-mini", "id": "bb5", "top": -558.2, "left": 333.6, "attrs": {} },
