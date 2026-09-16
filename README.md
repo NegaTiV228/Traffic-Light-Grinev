@@ -1,4 +1,4 @@
-# Traffic-Light
+<img width="1171" height="252" alt="image" src="https://github.com/user-attachments/assets/f9a4530d-32bc-41e1-a475-a329516b9fb5" /># Traffic-Light
 Проект светофора от 23.02.2026
 
 # Умный перекрёсток с адаптивными фазами и диспетчеризацией (ПР-231)
@@ -20,9 +20,8 @@
 
 ## Команда (роли меняются)
 
-*   **Дидилика Даниил** 
-*   **Чащин Сергей** 
-*   **Пецура Максим**
+*   **Гордей Гринев** 
+
 
 ## MVP (Минимально жизнеспособный продукт)
 
@@ -36,7 +35,7 @@
 
 Мы работаем по методологии Agile/Scrum. Список задач, бэклог спринта и статус выполнения доступны на нашей доске:
 
-**[Ссылка на GitHub Projects Board]** *https://github.com/DANgerANC/Traffic-Light*
+**[Ссылка на GitHub Projects Board]** *https://github.com/NegaTiV228/Traffic-Light-Grinev*
 
 ## Технический стек и оборудование (Wokwi)
 
